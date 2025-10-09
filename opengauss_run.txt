@@ -1,0 +1,1 @@
+docker run --name opengauss --privileged=true -d  -e GS_PASSWORD=0xccCheng! -p 8888:5432  -v "//d/collage class/CS213_database/project1/database_project1/data_for_opengauss:/mnt/sql"   opengauss/opengauss-server:latest
