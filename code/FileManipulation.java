@@ -148,4 +148,147 @@ public class FileManipulation implements DataManipulation {
     public String findMoviesByLimited10(String title) {
         return null;
     }
+
+    @Override
+    public String findFlightsByDay_op(String day_op) {
+        String sqlFilePath="D:\\collage class\\CS213_database\\project1\\database_project1\\data_for_file\\flights.sql";
+        List<Flight> flights = parseSQLFile(sqlFilePath);
+        List<Flight> matchedFlights = new ArrayList<>();
+
+        // 使用LIKE语义进行匹配
+        for (Flight flight : flights) {
+            if (flight.getDay_op().contains(day_op)) {
+                matchedFlights.add(flight);
+            }
+        }
+
+        // 格式化输出结果
+        return formatFlights(matchedFlights);
+    }
+
+    /**
+     * 解析SQL文件，提取航班数据
+     */
+    private List<Flight> parseSQLFile(String filePath) {
+        List<Flight> flights = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                // 查找INSERT语句
+                if (line.trim().toUpperCase().startsWith("INSERT INTO FLIGHTS")) {
+                    Flight flight = parseInsertStatement(line);
+                    if (flight != null) {
+                        flights.add(flight);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return flights;
+    }
+
+    /**
+     * 解析单条INSERT语句
+     */
+    private Flight parseInsertStatement(String insertStatement) {
+        try {
+            // 提取VALUES后面的部分
+            int valuesIndex = insertStatement.toUpperCase().indexOf("VALUES");
+            if (valuesIndex == -1) return null;
+
+            String valuesPart = insertStatement.substring(valuesIndex + "VALUES".length()).trim();
+
+            // 去除括号并分割字段
+            valuesPart = valuesPart.substring(1, valuesPart.lastIndexOf(')')).trim();
+
+            // 分割字段，注意处理字符串中的逗号
+            List<String> fields = splitFields(valuesPart);
+
+            if (fields.size() >= 9) {
+                String departure = cleanField(fields.get(0));
+                String arrival = cleanField(fields.get(1));
+                String day_op = cleanField(fields.get(2));
+                String dep_time = cleanField(fields.get(3));
+                String carrier = cleanField(fields.get(4));
+                String airline = cleanField(fields.get(5));
+                int flightnum = Integer.parseInt(cleanField(fields.get(6)));
+                int duration = Integer.parseInt(cleanField(fields.get(7)));
+                String aircraft = cleanField(fields.get(8));
+
+                return new Flight(departure, arrival, day_op, dep_time, carrier,
+                        airline, flightnum, duration, aircraft);
+            }
+        } catch (Exception e) {
+            System.err.println("解析INSERT语句失败: " + insertStatement);
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    /**
+     * 分割字段，处理字符串中的逗号
+     */
+    private List<String> splitFields(String valuesPart) {
+        List<String> fields = new ArrayList<>();
+        StringBuilder currentField = new StringBuilder();
+        boolean inQuotes = false;
+
+        for (int i = 0; i < valuesPart.length(); i++) {
+            char c = valuesPart.charAt(i);
+
+            if (c == '\'') {
+                inQuotes = !inQuotes;
+                currentField.append(c);
+            } else if (c == ',' && !inQuotes) {
+                fields.add(currentField.toString().trim());
+                currentField = new StringBuilder();
+            } else {
+                currentField.append(c);
+            }
+        }
+
+        // 添加最后一个字段
+        if (currentField.length() > 0) {
+            fields.add(currentField.toString().trim());
+        }
+
+        return fields;
+    }
+
+    /**
+     * 清理字段值（去除引号等）
+     */
+    private String cleanField(String field) {
+        if (field.startsWith("'") && field.endsWith("'")) {
+            return field.substring(1, field.length() - 1);
+        }
+        return field;
+    }
+
+    /**
+     * 格式化航班信息输出
+     */
+    private String formatFlights(List<Flight> flights) {
+        if (flights.isEmpty()) {
+            return "未找到匹配的航班信息";
+        }
+
+        StringBuilder strb = new StringBuilder();
+        for (Flight flight : flights) {
+            strb.append(String.format("%-5s\t", flight.getDeparture()));
+            strb.append(flight.getArrival()).append("\t");
+            strb.append(flight.getDay_op()).append("\t");
+            strb.append(flight.getDep_time()).append("\t");
+            strb.append(flight.getCarrier()).append("\t");
+            strb.append(flight.getAirline()).append("\t");
+            strb.append(String.format("%-5s\t", flight.getFlightnum()));
+            strb.append(String.format("%-5s\t", flight.getDuration()));
+            strb.append(flight.getAircraft()).append("\n");
+        }
+        return strb.toString();
+    }
 }

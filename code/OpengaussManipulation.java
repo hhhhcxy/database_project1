@@ -170,6 +170,36 @@ public class OpengaussManipulation implements DataManipulation {
         }
         return null;
     }
+    @Override
+    public String findFlightsByDay_op(String day_op){
+        getConnection();    // start connection
+        String sql = "select * from flights f where day_op like ?;";// string combination
+        try {
+            PreparedStatement preparedStatement = con.prepareStatement(sql);//change here!
+            preparedStatement.setString(1, day_op);// change here!
+            resultSet = preparedStatement.executeQuery();// and here!
+
+            StringBuilder strb=new StringBuilder(); //combine multi-strings
+            while (resultSet.next()){
+                strb.append(String.format("%-5s\t", resultSet.getString("departure")));
+                strb.append(resultSet.getString("arrival")).append("\t");
+                strb.append(resultSet.getString("day_op")).append("\t");
+                strb.append(resultSet.getString("dep_time")).append("\t");
+                strb.append(resultSet.getString("carrier")).append("\t");
+                strb.append(resultSet.getString("airline")).append("\t");
+                strb.append(String.format("%-5s\t", resultSet.getString("flightnum")));
+                strb.append(String.format("%-5s\t", resultSet.getInt("duration")));
+                strb.append(resultSet.getString("aircraft")).append("\n");
+            }
+            return strb.toString();
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+        finally {
+            closeConnection();  // close connection
+        }
+        return null;
+    }
 }
 /*
 @Override

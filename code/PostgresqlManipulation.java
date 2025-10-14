@@ -170,6 +170,11 @@ public class PostgresqlManipulation implements DataManipulation {
         }
         return null;
     }
+
+    @Override
+    public String findFlightsByDay_op(String day_op) {
+        return "";
+    }
 }
 /*
 @Override
