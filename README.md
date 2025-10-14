@@ -4,7 +4,7 @@
 -----
 ## 简介
 
-## 项目目录
+## github仓库的项目目录
 
 * ### data 
   原始数据备份  
@@ -14,4 +14,5 @@
   构建 postgreSQL 时使用的数据
 * ### data_for_opengauss
   构建 opengauss 时使用的数据
-* ### 
+* ### code
+  java 源代码
