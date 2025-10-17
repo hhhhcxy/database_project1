@@ -1,5 +1,9 @@
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class FileManipulation implements DataManipulation {
 
@@ -151,144 +155,65 @@ public class FileManipulation implements DataManipulation {
 
     @Override
     public String findFlightsByDay_op(String day_op) {
-        String sqlFilePath="D:\\collage class\\CS213_database\\project1\\database_project1\\data_for_file\\flights.sql";
-        List<Flight> flights = parseSQLFile(sqlFilePath);
-        List<Flight> matchedFlights = new ArrayList<>();
+        String jsonPath = "D:\\collage class\\CS213_database\\project1\\database_project1\\data_for_file\\flights.json"; // 转换后的 JSON 文件路径
 
-        // 使用LIKE语义进行匹配
-        for (Flight flight : flights) {
-            if (flight.getDay_op().contains(day_op)) {
-                matchedFlights.add(flight);
-            }
-        }
+        try {
+            // 1️⃣ 读取整个 JSON 文件
+            String json = Files.readString(Paths.get(jsonPath));
 
-        // 格式化输出结果
-        return formatFlights(matchedFlights);
-    }
+            // 2️⃣ 提取 data 数组部分
+            int start = json.indexOf("\"data\": [");
+            if (start == -1) return "❌ JSON 格式错误：未找到 data 字段";
+            start = json.indexOf("[", start) + 1;
+            int end = json.lastIndexOf("]");
+            String dataSection = json.substring(start, end).trim();
 
-    /**
-     * 解析SQL文件，提取航班数据
-     */
-    private List<Flight> parseSQLFile(String filePath) {
-        List<Flight> flights = new ArrayList<>();
+            // 3️⃣ 按每个对象分割（每个 { ... } 就是一条航班记录）
+            String[] entries = dataSection.split("\\},\\s*\\{");
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                // 查找INSERT语句
-                if (line.trim().toUpperCase().startsWith("INSERT INTO FLIGHTS")) {
-                    Flight flight = parseInsertStatement(line);
-                    if (flight != null) {
-                        flights.add(flight);
-                    }
+            StringBuilder strb = new StringBuilder();
+
+            for (String e : entries) {
+                String entry = e;
+                if (!entry.startsWith("{")) entry = "{" + entry;
+                if (!entry.endsWith("}")) entry = entry + "}";
+
+                // 精确匹配 day_op
+                String dayValue = extractJsonValue(entry, "day_op");
+                if (dayValue.equals(day_op)) {
+                    strb.append(String.format("%-5s\t", extractJsonValue(entry, "departure")));
+                    strb.append(extractJsonValue(entry, "arrival")).append("\t");
+                    strb.append(dayValue).append("\t");
+                    strb.append(extractJsonValue(entry, "dep_time")).append("\t");
+                    strb.append(extractJsonValue(entry, "carrier")).append("\t");
+                    strb.append(extractJsonValue(entry, "airline")).append("\t");
+                    strb.append(String.format("%-5s\t", extractJsonValue(entry, "flightnum")));
+                    strb.append(String.format("%-5s\t", extractJsonValue(entry, "duration")));
+                    strb.append(extractJsonValue(entry, "aircraft")).append("\n");
                 }
             }
+
+            return strb.length() > 0 ? strb.toString() : "未找到匹配的航班。";
+
         } catch (IOException e) {
             e.printStackTrace();
+            return "❌ 文件读取失败：" + e.getMessage();
         }
-
-        return flights;
     }
 
     /**
-     * 解析单条INSERT语句
+     * 从 JSON 对象字符串中提取指定字段的值。
+     * 例如 extractJsonValue("{\"departure\":\"ACC\",\"arrival\":\"AMS\"}", "arrival") → "AMS"
      */
-    private Flight parseInsertStatement(String insertStatement) {
-        try {
-            // 提取VALUES后面的部分
-            int valuesIndex = insertStatement.toUpperCase().indexOf("VALUES");
-            if (valuesIndex == -1) return null;
-
-            String valuesPart = insertStatement.substring(valuesIndex + "VALUES".length()).trim();
-
-            // 去除括号并分割字段
-            valuesPart = valuesPart.substring(1, valuesPart.lastIndexOf(')')).trim();
-
-            // 分割字段，注意处理字符串中的逗号
-            List<String> fields = splitFields(valuesPart);
-
-            if (fields.size() >= 9) {
-                String departure = cleanField(fields.get(0));
-                String arrival = cleanField(fields.get(1));
-                String day_op = cleanField(fields.get(2));
-                String dep_time = cleanField(fields.get(3));
-                String carrier = cleanField(fields.get(4));
-                String airline = cleanField(fields.get(5));
-                int flightnum = Integer.parseInt(cleanField(fields.get(6)));
-                int duration = Integer.parseInt(cleanField(fields.get(7)));
-                String aircraft = cleanField(fields.get(8));
-
-                return new Flight(departure, arrival, day_op, dep_time, carrier,
-                        airline, flightnum, duration, aircraft);
-            }
-        } catch (Exception e) {
-            System.err.println("解析INSERT语句失败: " + insertStatement);
-            e.printStackTrace();
+    private static String extractJsonValue(String json, String key) {
+        String regex = "\"" + key + "\"\\s*:\\s*(\"[^\"]*\"|\\d+)";
+        Matcher m = Pattern.compile(regex).matcher(json);
+        if (m.find()) {
+            String val = m.group(1);
+            if (val.startsWith("\"") && val.endsWith("\""))
+                val = val.substring(1, val.length() - 1);
+            return val;
         }
-
-        return null;
-    }
-
-    /**
-     * 分割字段，处理字符串中的逗号
-     */
-    private List<String> splitFields(String valuesPart) {
-        List<String> fields = new ArrayList<>();
-        StringBuilder currentField = new StringBuilder();
-        boolean inQuotes = false;
-
-        for (int i = 0; i < valuesPart.length(); i++) {
-            char c = valuesPart.charAt(i);
-
-            if (c == '\'') {
-                inQuotes = !inQuotes;
-                currentField.append(c);
-            } else if (c == ',' && !inQuotes) {
-                fields.add(currentField.toString().trim());
-                currentField = new StringBuilder();
-            } else {
-                currentField.append(c);
-            }
-        }
-
-        // 添加最后一个字段
-        if (currentField.length() > 0) {
-            fields.add(currentField.toString().trim());
-        }
-
-        return fields;
-    }
-
-    /**
-     * 清理字段值（去除引号等）
-     */
-    private String cleanField(String field) {
-        if (field.startsWith("'") && field.endsWith("'")) {
-            return field.substring(1, field.length() - 1);
-        }
-        return field;
-    }
-
-    /**
-     * 格式化航班信息输出
-     */
-    private String formatFlights(List<Flight> flights) {
-        if (flights.isEmpty()) {
-            return "未找到匹配的航班信息";
-        }
-
-        StringBuilder strb = new StringBuilder();
-        for (Flight flight : flights) {
-            strb.append(String.format("%-5s\t", flight.getDeparture()));
-            strb.append(flight.getArrival()).append("\t");
-            strb.append(flight.getDay_op()).append("\t");
-            strb.append(flight.getDep_time()).append("\t");
-            strb.append(flight.getCarrier()).append("\t");
-            strb.append(flight.getAirline()).append("\t");
-            strb.append(String.format("%-5s\t", flight.getFlightnum()));
-            strb.append(String.format("%-5s\t", flight.getDuration()));
-            strb.append(flight.getAircraft()).append("\n");
-        }
-        return strb.toString();
+        return "";
     }
 }
