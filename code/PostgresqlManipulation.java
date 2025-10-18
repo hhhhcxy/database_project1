@@ -1,4 +1,6 @@
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.sql.*;
 
 public class PostgresqlManipulation implements DataManipulation {
@@ -6,10 +8,104 @@ public class PostgresqlManipulation implements DataManipulation {
     private ResultSet resultSet;
 
     private String host = "localhost";
-    private String dbname = "lab4";
+    private String dbname = "Project1";
     private String user = "postgres";
     private String pwd = "0xccCheng";
     private String port = "5432";
+
+    @Override
+    public void initDatabase() {
+        String sqlFilePath="D:\\collage class\\CS213_database\\project1\\database_project1\\data_for_postgreSQL\\flights.sql";
+        String url = "jdbc:postgresql://" + host + ":" + port + "/postgres"; // 连接默认库postgres
+
+        try (Connection conn = DriverManager.getConnection(url, user, pwd);
+             Statement stmt = conn.createStatement()) {
+
+            conn.setAutoCommit(true);
+
+            System.out.println("连接到 PostgreSQL 数据库服务器...");
+
+            // 1️⃣ 删除旧数据库（如果存在）
+            System.out.println("正在删除旧数据库（如果存在）...");
+            stmt.executeUpdate("DROP DATABASE IF EXISTS \"" + dbname + "\";");
+
+            // 2️⃣ 创建新数据库
+            System.out.println("正在创建新数据库...");
+            stmt.executeUpdate("CREATE DATABASE \"" + dbname + "\" WITH ENCODING 'UTF8';");
+
+            // 3️⃣ 导入SQL文件
+            importSQL(sqlFilePath);
+
+            restartPostgresService();
+
+            System.out.println("✅ 数据库初始化完成！");
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void importSQL(String sqlFilePath) {
+        try {
+            String command = String.format(
+                    "psql -h %s -p %s -U %s -d %s -f \"%s\"",
+                    host, port, user, dbname, sqlFilePath
+            );
+
+            System.out.println("执行命令：" + command);
+
+            // ✅ 在进程中设置 PGPASSWORD 环境变量
+            ProcessBuilder pb = new ProcessBuilder("cmd", "/c", command);
+            pb.environment().put("PGPASSWORD", pwd);
+
+            Process process = pb.start();
+
+            // 读取输出流（避免阻塞）
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()));
+            BufferedReader errReader = new BufferedReader(
+                    new InputStreamReader(process.getErrorStream()));
+
+            String line;
+            while ((line = reader.readLine()) != null) System.out.println(line);
+            while ((line = errReader.readLine()) != null) System.err.println(line);
+
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                System.out.println("✅ SQL 导入成功。");
+            } else {
+                System.err.println("⚠️ SQL 导入失败，退出代码：" + exitCode);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
+    /**
+     * 可选：重启数据库服务（仅限本地、需管理员权限）
+     */
+    private void restartPostgresService() {
+        String serviceName = "postgresql-x64-17"; // 请根据你的 PostgreSQL 版本修改
+        try {
+            System.out.println("尝试重启 PostgreSQL 服务 (" + serviceName + ")...");
+
+            // 停止服务
+            Process stopProcess = new ProcessBuilder("cmd", "/c", "net stop " + serviceName).start();
+            stopProcess.waitFor();
+
+            // 启动服务
+            Process startProcess = new ProcessBuilder("cmd", "/c", "net start " + serviceName).start();
+            startProcess.waitFor();
+
+            System.out.println("✅ PostgreSQL 服务已成功重启。");
+        } catch (Exception e) {
+            System.err.println("⚠️ 无法重启 PostgreSQL 服务，请检查服务名或管理员权限。");
+            e.printStackTrace();
+        }
+    }
 
 
     private void getConnection() {
@@ -172,8 +268,34 @@ public class PostgresqlManipulation implements DataManipulation {
     }
 
     @Override
-    public String findFlightsByDay_op(String day_op) {
-        return "";
+    public String findFlightsByDay_op(String day_op){
+        getConnection();    // start connection
+        String sql = "select * from flights f where day_op like ?;";// string combination
+        try {
+            PreparedStatement preparedStatement = con.prepareStatement(sql);//change here!
+            preparedStatement.setString(1, day_op);// change here!
+            resultSet = preparedStatement.executeQuery();// and here!
+
+            StringBuilder strb=new StringBuilder(); //combine multi-strings
+            while (resultSet.next()){
+                strb.append(String.format("%-5s\t", resultSet.getString("departure")));
+                strb.append(resultSet.getString("arrival")).append("\t");
+                strb.append(resultSet.getString("day_op")).append("\t");
+                strb.append(resultSet.getString("dep_time")).append("\t");
+                strb.append(resultSet.getString("carrier")).append("\t");
+                strb.append(resultSet.getString("airline")).append("\t");
+                strb.append(String.format("%-5s\t", resultSet.getString("flightnum")));
+                strb.append(String.format("%-5s\t", resultSet.getInt("duration")));
+                strb.append(resultSet.getString("aircraft")).append("\n");
+            }
+            return strb.toString();
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+        finally {
+            closeConnection();  // close connection
+        }
+        return null;
     }
 }
 /*

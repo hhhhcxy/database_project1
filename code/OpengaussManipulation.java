@@ -1,4 +1,7 @@
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.sql.*;
 
 public class OpengaussManipulation implements DataManipulation {
@@ -6,7 +9,7 @@ public class OpengaussManipulation implements DataManipulation {
     private ResultSet resultSet;
 
     private String host = "localhost";
-    private String dbname = "postgres";
+    private String dbname = "project1";
     private String user = "new_user";
     private String pwd = "0xccCheng!";
     private String port = "8888";
@@ -170,6 +173,99 @@ public class OpengaussManipulation implements DataManipulation {
         }
         return null;
     }
+
+    private String containerName = "opengauss";
+
+    /**
+     * 初始化 openGauss 数据库：删除旧库，创建新库，导入 SQL
+     */
+    public void initDatabase() {
+        String url = "jdbc:postgresql://" + host + ":" + port + "/postgres"; // openGauss JDBC 兼容
+
+        try (Connection conn = DriverManager.getConnection(url, user, pwd);
+             Statement stmt = conn.createStatement()) {
+
+            System.out.println("连接到 openGauss 数据库服务器...");
+
+            // 删除旧数据库
+            System.out.println("正在删除旧数据库（如果存在）...");
+            stmt.executeUpdate("DROP DATABASE IF EXISTS \"" + dbname + "\";");
+
+            // 创建新数据库
+            System.out.println("正在创建新数据库...");
+            stmt.executeUpdate("CREATE DATABASE \"" + dbname + "\" WITH ENCODING 'UTF8';");
+
+            // 导入 SQL 文件（通过 docker exec 调用 gsql）
+            importSQLInDocker();
+
+            restartDatabaseContainer();
+            try {
+                Thread.sleep(5000); // 等待容器重启后数据库完全启动
+            } catch (InterruptedException e) {
+                // 重新设置中断状态（推荐做法）
+                Thread.currentThread().interrupt();
+                System.err.println("等待过程中线程被中断：" + e.getMessage());
+            }
+
+            System.out.println("✅ openGauss 数据库初始化完成！");
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void restartDatabaseContainer() {
+        try {
+            System.out.println("正在重启 openGauss 容器: " + containerName);
+            executeCommand("docker restart " + containerName);
+            System.out.println("✅ 容器已重启。");
+        } catch (Exception e) {
+            System.err.println("⚠️ 重启容器失败，请确认容器名称是否正确或 Docker 是否正在运行。");
+            e.printStackTrace();
+        }
+    }
+
+    private void importSQLInDocker() {
+        String containerSQLPath ="/mnt/sql/flights.sql";
+        try {
+            // 2️⃣ 执行 gsql 导入命令
+            System.out.println("在容器中执行 gsql 导入...");
+            String command = String.format(
+                    "docker exec -i -u omm opengauss bash -c \"export LD_LIBRARY_PATH=/usr/local/opengauss/lib && /usr/local/opengauss/bin/gsql -d %s -U %s -W \\\"%s\\\" -f \\\"%s\\\"\"",
+                    dbname, user, pwd, containerSQLPath
+            );
+
+            System.out.println("执行命令：" + command);
+            executeCommand(command);
+
+            System.out.println("✅ SQL 导入成功！");
+
+        } catch (Exception e) {
+            System.err.println("⚠️ 导入 SQL 文件失败：");
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 执行外部命令并打印输出
+     */
+    private void executeCommand(String command) throws IOException, InterruptedException {
+        System.out.println("执行命令：" + command);
+        Process process = new ProcessBuilder("cmd", "/c", command).start();
+
+        BufferedReader stdOut = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        BufferedReader stdErr = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+
+        String line;
+        while ((line = stdOut.readLine()) != null) System.out.println(line);
+        while ((line = stdErr.readLine()) != null) System.err.println(line);
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException("命令执行失败，退出码：" + exitCode);
+        }
+    }
+
     @Override
     public String findFlightsByDay_op(String day_op){
         getConnection();    // start connection

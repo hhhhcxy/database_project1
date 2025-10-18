@@ -1,6 +1,8 @@
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -151,6 +153,37 @@ public class FileManipulation implements DataManipulation {
     @Override
     public String findMoviesByLimited10(String title) {
         return null;
+    }
+
+    public void initDatabase() {
+        // 定义路径
+        Path source = Paths.get("D:\\collage class\\CS213_database\\project1\\database_project1\\data_for_file\\flights_copy.json");
+        Path target = Paths.get("D:\\collage class\\CS213_database\\project1\\database_project1\\data_for_file\\flights.json");
+
+        System.out.println("🔧 正在初始化文件...");
+
+        try {
+            // 检查源文件是否存在
+            if (!Files.exists(source)) {
+                System.err.println("⚠️ 备份文件不存在：" + source);
+                return;
+            }
+
+            // 如果目标文件存在，先删除
+            if (Files.exists(target)) {
+                Files.delete(target);
+                System.out.println("🗑 已删除旧文件：" + target);
+            }
+
+            // 复制文件（保留文件属性）
+            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+            System.out.println("✅ 文件已成功恢复为备份版本！");
+            System.out.println("👉 目标文件路径：" + target);
+
+        } catch (IOException e) {
+            System.err.println("❌ 文件初始化失败：" + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     @Override
