@@ -234,6 +234,114 @@ public class FileManipulation implements DataManipulation {
         }
     }
 
+    @Override
+    public String findFlightsByFlightnum(String flightnum) {
+        String jsonPath = "D:\\collage class\\CS213_database\\project1\\database_project1\\data_for_file\\flights.json"; // JSON 文件路径
+
+        try {
+            // 1️⃣ 读取整个 JSON 文件
+            String json = Files.readString(Paths.get(jsonPath));
+
+            // 2️⃣ 提取 data 数组部分
+            int start = json.indexOf("\"data\": [");
+            if (start == -1) return "❌ JSON 格式错误：未找到 data 字段";
+            start = json.indexOf("[", start) + 1;
+            int end = json.lastIndexOf("]");
+            String dataSection = json.substring(start, end).trim();
+
+            // 3️⃣ 按每个对象分割（每个 { ... } 就是一条航班记录）
+            String[] entries = dataSection.split("\\},\\s*\\{");
+
+            StringBuilder strb = new StringBuilder();
+
+            for (String e : entries) {
+                String entry = e;
+                if (!entry.startsWith("{")) entry = "{" + entry;
+                if (!entry.endsWith("}")) entry = entry + "}";
+
+                // 提取航班号字段
+                String flightValue = extractJsonValue(entry, "flightnum");
+
+                // 模糊匹配航班号（包含输入子串）
+                if (flightValue.contains(flightnum)) {
+                    strb.append(String.format("%-5s\t", extractJsonValue(entry, "departure")));
+                    strb.append(extractJsonValue(entry, "arrival")).append("\t");
+                    strb.append(extractJsonValue(entry, "day_op")).append("\t");
+                    strb.append(extractJsonValue(entry, "dep_time")).append("\t");
+                    strb.append(extractJsonValue(entry, "carrier")).append("\t");
+                    strb.append(extractJsonValue(entry, "airline")).append("\t");
+                    strb.append(String.format("%-5s\t", flightValue));
+                    strb.append(String.format("%-5s\t", extractJsonValue(entry, "duration")));
+                    strb.append(extractJsonValue(entry, "aircraft")).append("\n");
+                }
+            }
+
+            return strb.length() > 0 ? strb.toString() : "未找到匹配的航班号。";
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "❌ 文件读取失败：" + e.getMessage();
+        }
+    }
+
+    @Override
+    public String updateFlightnumSubstring(String oldSubstr, String newSubstr) {
+        String jsonPath = "D:\\collage class\\CS213_database\\project1\\database_project1\\data_for_file\\flights.json"; // JSON 文件路径
+
+        try {
+            // 1️⃣ 读取整个 JSON 文件内容
+            String json = Files.readString(Paths.get(jsonPath));
+
+            // 2️⃣ 定位 data 数组部分
+            int start = json.indexOf("\"data\": [");
+            if (start == -1) return "❌ JSON 格式错误：未找到 data 字段";
+            start = json.indexOf("[", start) + 1;
+            int end = json.lastIndexOf("]");
+            String dataSection = json.substring(start, end).trim();
+
+            // 3️⃣ 按每个对象分割（每个 { ... } 是一条航班记录）
+            String[] entries = dataSection.split("\\},\\s*\\{");
+
+            StringBuilder newData = new StringBuilder();
+            int modifiedCount = 0;
+
+            for (int i = 0; i < entries.length; i++) {
+                String entry = entries[i];
+                if (!entry.startsWith("{")) entry = "{" + entry;
+                if (!entry.endsWith("}")) entry = entry + "}";
+
+                String flightnum = extractJsonValue(entry, "flightnum");
+
+                // 判断是否包含要替换的子串
+                if (flightnum.contains(oldSubstr)) {
+                    String newFlightnum = flightnum.replace(oldSubstr, newSubstr);
+                    // 替换 JSON 中对应字段内容
+                    entry = entry.replace("\"flightnum\": \"" + flightnum + "\"",
+                            "\"flightnum\": \"" + newFlightnum + "\"");
+                    modifiedCount++;
+                }
+
+                // 拼接新的 data 段
+                newData.append(entry);
+                if (i < entries.length - 1) newData.append(",\n");
+            }
+
+            // 4️⃣ 重新拼成完整 JSON（保留原始结构）
+            String newJson = json.substring(0, start) + newData.toString() + json.substring(end);
+
+            // 5️⃣ 写回文件（覆盖原文件）
+            Files.writeString(Paths.get(jsonPath), newJson);
+
+            return "✅ 更新成功：共有 " + modifiedCount + " 条航班号被修改并写回文件。";
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "❌ 文件更新失败：" + e.getMessage();
+        }
+    }
+
+
+
     /**
      * 从 JSON 对象字符串中提取指定字段的值。
      * 例如 extractJsonValue("{\"departure\":\"ACC\",\"arrival\":\"AMS\"}", "arrival") → "AMS"

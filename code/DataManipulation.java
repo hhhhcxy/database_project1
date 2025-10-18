@@ -8,4 +8,6 @@ public interface DataManipulation {
     public String findMoviesByLimited10(String title);
     public void initDatabase();
     public String findFlightsByDay_op(String day_op);
+    public String findFlightsByFlightnum(String flightnum);
+    public String updateFlightnumSubstring(String oldSubstr, String newSubstr);
 }

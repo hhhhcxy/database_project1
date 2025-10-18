@@ -296,6 +296,65 @@ public class OpengaussManipulation implements DataManipulation {
         }
         return null;
     }
+
+    @Override
+    public String findFlightsByFlightnum(String flightnum) {
+        getConnection();  // start connection
+        String sql = "SELECT * FROM flights WHERE flightnum::text LIKE ?;";// SQL语句
+
+        try {
+            PreparedStatement preparedStatement = con.prepareStatement(sql);
+            // 使用模糊匹配（包含该子串）
+            preparedStatement.setString(1, "%" + flightnum + "%");
+
+            resultSet = preparedStatement.executeQuery();
+
+            StringBuilder strb = new StringBuilder();
+            while (resultSet.next()) {
+                strb.append(String.format("%-5s\t", resultSet.getString("departure")));
+                strb.append(resultSet.getString("arrival")).append("\t");
+                strb.append(resultSet.getString("day_op")).append("\t");
+                strb.append(resultSet.getString("dep_time")).append("\t");
+                strb.append(resultSet.getString("carrier")).append("\t");
+                strb.append(resultSet.getString("airline")).append("\t");
+                strb.append(String.format("%-5s\t", resultSet.getString("flightnum")));
+                strb.append(String.format("%-5s\t", resultSet.getInt("duration")));
+                strb.append(resultSet.getString("aircraft")).append("\n");
+            }
+            return strb.toString();
+
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            closeConnection(); // close connection
+        }
+
+        return null;
+    }
+
+    @Override
+    public String updateFlightnumSubstring(String oldSubstr, String newSubstr) {
+        getConnection(); // start connection
+
+        // 使用 SQL 的 REPLACE() 实现字符串替换
+        String sql = "UPDATE flights SET flightnum = REPLACE(flightnum, ?, ?);";
+
+        try {
+            PreparedStatement preparedStatement = con.prepareStatement(sql);
+            preparedStatement.setString(1, oldSubstr); // 要被替换的子串
+            preparedStatement.setString(2, newSubstr); // 替换成的新子串
+
+            int rowsAffected = preparedStatement.executeUpdate(); // 执行更新
+
+            return "✅ 更新成功：共有 " + rowsAffected + " 条航班记录的航班号被修改。";
+
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+            return "❌ 数据库更新失败：" + throwables.getMessage();
+        } finally {
+            closeConnection(); // close connection
+        }
+    }
 }
 /*
 @Override
